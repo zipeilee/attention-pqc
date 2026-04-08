@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+"""Export helpers for persisting VQE outputs in project-compatible formats."""
+
 import csv
 import json
 from pathlib import Path
@@ -10,18 +12,21 @@ from .solver import PointResult, SweepResult
 
 
 def ensure_output_dir(config: VQEConfig) -> Path:
+    """Create and return the output directory for the current run."""
     output_dir = config.output.resolved_output_dir()
     output_dir.mkdir(parents=True, exist_ok=True)
     return output_dir
 
 
 def write_config_snapshot(config: VQEConfig, output_dir: Path) -> Path:
+    """Persist the effective configuration next to generated results."""
     file_path = output_dir / "config.snapshot.json"
     file_path.write_text(json.dumps(config.to_dict(), indent=2, ensure_ascii=False), encoding="utf-8")
     return file_path
 
 
 def export_point_files(points: Iterable[PointResult], output_dir: Path) -> List[Path]:
+    """Write one single-column CSV per sweep point for legacy data loading."""
     exported: List[Path] = []
     for point in points:
         file_path = output_dir / f"{point.lambda_value:.3f}.csv"
@@ -35,6 +40,7 @@ def export_point_files(points: Iterable[PointResult], output_dir: Path) -> List[
 
 
 def export_wide_params(points: Iterable[PointResult], output_dir: Path) -> Path:
+    """Write all optimized parameters into a single wide CSV table."""
     points = list(points)
     if not points:
         raise ValueError("No points available to export.")
@@ -52,6 +58,7 @@ def export_wide_params(points: Iterable[PointResult], output_dir: Path) -> Path:
 
 
 def export_summary(points: Iterable[PointResult], output_dir: Path) -> Path:
+    """Write a compact summary row for each solved sweep point."""
     file_path = output_dir / "summary.csv"
     with file_path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.writer(handle)
@@ -82,6 +89,7 @@ def export_summary(points: Iterable[PointResult], output_dir: Path) -> Path:
 
 
 def export_histories(points: Iterable[PointResult], output_dir: Path) -> List[Path]:
+    """Write per-point optimization histories for later diagnostics."""
     exported: List[Path] = []
     for point in points:
         file_path = output_dir / f"history_{point.lambda_value:.3f}.json"
@@ -102,6 +110,7 @@ def export_histories(points: Iterable[PointResult], output_dir: Path) -> List[Pa
 
 
 def export_result_bundle(config: VQEConfig, result: SweepResult) -> Dict[str, str]:
+    """Export the configured artifact set and return the generated file paths."""
     output_dir = ensure_output_dir(config)
     paths: Dict[str, str] = {}
     paths["config"] = str(write_config_snapshot(config, output_dir))

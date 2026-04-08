@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+"""MindSpore integration layer for training MindQuantum VQE ansatz parameters."""
+
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 import math
@@ -15,6 +17,8 @@ from .solver import PointResult, SweepResult, exact_reference_energy, initialize
 
 @dataclass
 class MindSporeVQEArtifacts:
+    """Objects needed to drive a MindSpore-backed VQE training loop."""
+
     grad_ops: Any
     layer: Any
     objective: Any
@@ -27,17 +31,22 @@ class MindSporeVQEArtifacts:
 
 @dataclass
 class MindSporeTrainStepResult:
+    """Scalar outputs captured after one MindSpore training step."""
+
     loss: float
     grad_norm: Optional[float]
 
 
 @dataclass
 class MindSporeLayerSnapshot:
+    """Instantaneous layer state used for logging and best-checkpoint tracking."""
+
     energy: float
     weights: np.ndarray
 
 
 def initialize_mindspore(runtime_config: Any) -> Dict[str, str]:
+    """Initialize the MindSpore execution context from runtime settings."""
     try:
         import mindspore as ms
     except ImportError as exc:
@@ -57,6 +66,7 @@ def initialize_mindspore(runtime_config: Any) -> Dict[str, str]:
 
 
 def _require_framework_modules() -> Tuple[Any, Any, Any, Any, Any, Any, Any]:
+    """Import MindSpore and MindQuantum framework modules lazily."""
     try:
         import mindspore as ms
         from mindspore import Tensor, nn, ops
@@ -69,6 +79,7 @@ def _require_framework_modules() -> Tuple[Any, Any, Any, Any, Any, Any, Any]:
 
 
 def _build_vqe_objective_cell(ms: Any, ops: Any, layer: Any) -> Any:
+    """Wrap the quantum layer so TrainOneStepCell sees a scalar objective."""
     class VQEAnsatzCell(ms.nn.Cell):
         def __init__(self, inner_layer: Any):
             super().__init__()
@@ -82,6 +93,7 @@ def _build_vqe_objective_cell(ms: Any, ops: Any, layer: Any) -> Any:
 
 
 def _to_scalar(value: Any) -> float:
+    """Convert MindSpore tensors or array-like values into a Python float."""
     if hasattr(value, "asnumpy"):
         array = np.asarray(value.asnumpy())
     else:
@@ -90,6 +102,7 @@ def _to_scalar(value: Any) -> float:
 
 
 def _extract_grad_norm(train_output: Any) -> Optional[float]:
+    """Estimate the gradient norm when TrainOneStepCell returns gradients."""
     if not isinstance(train_output, tuple) or len(train_output) != 2:
         return None
     _, grad_payload = train_output
@@ -103,6 +116,7 @@ def _extract_grad_norm(train_output: Any) -> Optional[float]:
 
 
 def _current_layer_snapshot(layer: Any) -> MindSporeLayerSnapshot:
+    """Read the current energy and trainable weights from a quantum layer."""
     energy = _to_scalar(layer())
     weights = np.asarray(layer.weight.asnumpy(), dtype=float).copy()
     return MindSporeLayerSnapshot(energy=energy, weights=weights)
@@ -113,6 +127,7 @@ def build_mindspore_training_cell(
     control_value: float,
     initial_params: Optional[np.ndarray] = None,
 ) -> MindSporeVQEArtifacts:
+    """Create the simulator, quantum layer, optimizer, and train cell for one point."""
     runtime_context = initialize_mindspore(config.runtime)
     ms, Tensor, nn, ops, MQAnsatzOnlyLayer, _, _ = _require_framework_modules()
 
@@ -173,6 +188,7 @@ def build_mindspore_inference_layer(
     control_value: float,
     initial_params: Optional[np.ndarray] = None,
 ) -> MindSporeVQEArtifacts:
+    """Alias training-cell construction for evaluation-only callers."""
     return build_mindspore_training_cell(
         config=config,
         control_value=control_value,
@@ -181,6 +197,7 @@ def build_mindspore_inference_layer(
 
 
 def run_train_step(artifacts: MindSporeVQEArtifacts) -> MindSporeTrainStepResult:
+    """Execute one optimization step and normalize the return payload."""
     train_output = artifacts.train_cell()
     if isinstance(train_output, tuple):
         loss_tensor = train_output[0]
@@ -193,6 +210,7 @@ def run_train_step(artifacts: MindSporeVQEArtifacts) -> MindSporeTrainStepResult
 
 
 def evaluate_mindspore_layer(artifacts: MindSporeVQEArtifacts) -> MindSporeLayerSnapshot:
+    """Evaluate the current layer weights without permanently switching train mode."""
     artifacts.layer.set_train(False)
     snapshot = _current_layer_snapshot(artifacts.layer)
     artifacts.layer.set_train(True)
@@ -205,6 +223,7 @@ def run_mindspore_single_point(
     initial_params: Optional[np.ndarray] = None,
     init_source: str = "mindspore_fresh",
 ) -> PointResult:
+    """Optimize one sweep point through MindSpore's training loop."""
     config.validate()
     artifacts = build_mindspore_training_cell(config, control_value, initial_params=initial_params)
 
@@ -274,6 +293,7 @@ def run_mindspore_single_point(
 
 
 def run_mindspore_sweep(config: VQEConfig) -> SweepResult:
+    """Run the full control-parameter sweep on the MindSpore-backed path."""
     config.validate()
     values = sweep_values(config.sweep)
     points: List[PointResult] = []

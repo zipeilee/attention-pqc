@@ -1,4 +1,8 @@
-"""MindQuantum + MindSpore VQE toolkit for attention-pqc."""
+"""MindQuantum + MindSpore VQE toolkit for attention-pqc.
+
+This package exposes configuration models, solver entry points, and the
+MindSpore integration layer used by the new Python-based VQE workflow.
+"""
 
 from .config import (
     OutputConfig,

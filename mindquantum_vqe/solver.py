@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+"""Numerical VQE solvers shared by the direct and MindSpore-backed paths."""
+
 from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List, Optional
 import math
@@ -14,6 +16,8 @@ from .hamiltonians import build_hamiltonian, hamiltonian_metadata, hamiltonian_t
 
 @dataclass
 class PointResult:
+    """Optimization result for a single control-parameter value."""
+
     lambda_value: float
     status: str
     converged: bool
@@ -30,6 +34,7 @@ class PointResult:
     metadata: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
+        """Convert the result into JSON-serializable data."""
         payload = asdict(self)
         payload["best_params"] = list(self.best_params)
         payload["param_names"] = list(self.param_names)
@@ -38,10 +43,13 @@ class PointResult:
 
 @dataclass
 class SweepResult:
+    """Collection of point-wise VQE results over a parameter sweep."""
+
     points: List[PointResult]
     metadata: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
+        """Serialize sweep metadata and all contained point results."""
         return {
             "metadata": self.metadata,
             "points": [point.to_dict() for point in self.points],
@@ -49,6 +57,8 @@ class SweepResult:
 
 
 class AdamState:
+    """Minimal Adam optimizer state used by the NumPy-based solver path."""
+
     def __init__(self, size: int, beta1: float, beta2: float, epsilon: float) -> None:
         self.m = np.zeros(size, dtype=float)
         self.v = np.zeros(size, dtype=float)
@@ -58,6 +68,7 @@ class AdamState:
         self.step = 0
 
     def update(self, params: np.ndarray, grad: np.ndarray, lr: float) -> np.ndarray:
+        """Apply one Adam update step and return the new parameter vector."""
         self.step += 1
         self.m = self.beta1 * self.m + (1.0 - self.beta1) * grad
         self.v = self.beta2 * self.v + (1.0 - self.beta2) * (grad ** 2)
@@ -67,6 +78,8 @@ class AdamState:
 
 
 class ExpectationWithGrad:
+    """Wrap MindQuantum expectation/gradient evaluation behind a NumPy API."""
+
     def __init__(self, system_n_qubits: int, terms: List[Any], circuit: Any, backend: str) -> None:
         try:
             from mindquantum.simulator import Simulator
@@ -93,6 +106,7 @@ class ExpectationWithGrad:
             self._batched = False
 
     def __call__(self, params: np.ndarray) -> tuple[float, np.ndarray]:
+        """Evaluate the current energy and gradient at the given parameters."""
         params = np.asarray(params, dtype=float)
         result = self.grad_ops(params)
         if self._batched:
@@ -105,6 +119,7 @@ class ExpectationWithGrad:
 
 
 def build_hamiltonian_from_terms(terms: List[Any]) -> Any:
+    """Rebuild a single Hamiltonian object from internal weighted terms."""
     try:
         from mindquantum.core.operators import Hamiltonian, QubitOperator
     except ImportError as exc:
@@ -118,6 +133,7 @@ def build_hamiltonian_from_terms(terms: List[Any]) -> Any:
 
 
 def sweep_values(config: SweepConfig) -> List[float]:
+    """Expand the sweep configuration into an ordered list of control values."""
     if config.lambda_values:
         return [float(value) for value in config.lambda_values]
     if not config.enabled:
@@ -131,6 +147,7 @@ def sweep_values(config: SweepConfig) -> List[float]:
 
 
 def initialize_params(n_params: int, optimizer: OptimizerConfig) -> np.ndarray:
+    """Create an initial parameter vector using the configured strategy."""
     rng = np.random.default_rng(optimizer.seed)
     if optimizer.init_strategy == "zeros":
         return np.zeros(n_params, dtype=float)
@@ -142,6 +159,7 @@ def initialize_params(n_params: int, optimizer: OptimizerConfig) -> np.ndarray:
 
 
 def build_expectation_with_grad(config: VQEConfig, control_value: float) -> tuple[Any, Any, Any]:
+    """Construct the circuit, Hamiltonian, and evaluator for one sweep point."""
     circuit_info = build_circuit(config.system)
     hamiltonian, terms = build_hamiltonian(config.system, control_value)
     evaluator = ExpectationWithGrad(
@@ -154,6 +172,7 @@ def build_expectation_with_grad(config: VQEConfig, control_value: float) -> tupl
 
 
 def exact_reference_energy(config: VQEConfig, control_value: float) -> Optional[float]:
+    """Diagonalize small systems exactly to provide a reference baseline."""
     if config.system.n_qubits > config.runtime.exact_reference_max_qubits:
         return None
     terms = hamiltonian_terms(config.system, control_value)
@@ -184,6 +203,7 @@ def solve_single_point(
     initial_params: Optional[np.ndarray] = None,
     init_source: str = "fresh",
 ) -> PointResult:
+    """Optimize one Hamiltonian instance with the NumPy + MindQuantum path."""
     config.validate()
     circuit_info, _, evaluator = build_expectation_with_grad(config, control_value)
     params = (
@@ -264,6 +284,7 @@ def solve_single_point(
 
 
 def solve_sweep(config: VQEConfig) -> SweepResult:
+    """Run the configured parameter sweep, optionally reusing warm starts."""
     config.validate()
     values = sweep_values(config.sweep)
     points: List[PointResult] = []

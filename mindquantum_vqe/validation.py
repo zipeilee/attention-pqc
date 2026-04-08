@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+"""Validation helpers for checking circuit, Hamiltonian, and gradient behavior."""
+
 from typing import Any, Dict, List
 
 import numpy as np
@@ -11,6 +13,7 @@ from .solver import build_expectation_with_grad, exact_reference_energy
 
 
 def validate_circuit_structure(config: VQEConfig) -> Dict[str, Any]:
+    """Inspect the generated circuit and report basic structural invariants."""
     circuit_info = build_circuit(config.system)
     return {
         "ansatz": circuit_info.ansatz,
@@ -20,6 +23,7 @@ def validate_circuit_structure(config: VQEConfig) -> Dict[str, Any]:
 
 
 def validate_hamiltonian_structure(config: VQEConfig, control_value: float) -> Dict[str, Any]:
+    """Inspect the Hamiltonian term count and preview the leading terms."""
     _, terms = build_hamiltonian(config.system, control_value)
     return {
         "hamiltonian": config.system.hamiltonian,
@@ -35,6 +39,7 @@ def finite_difference_gradient_check(
     epsilon: float = 1e-6,
     n_checks: int = 3,
 ) -> Dict[str, Any]:
+    """Compare analytic gradients against finite-difference estimates."""
     circuit_info, _, evaluator = build_expectation_with_grad(config, control_value)
     params = np.ones(circuit_info.n_params, dtype=float)
     energy, grad = evaluator(params)
@@ -62,6 +67,7 @@ def finite_difference_gradient_check(
 
 
 def build_validation_report(config: VQEConfig, control_value: float) -> Dict[str, Any]:
+    """Assemble a full validation report for one representative control value."""
     return {
         "circuit": validate_circuit_structure(config),
         "hamiltonian": validate_hamiltonian_structure(config, control_value),

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+"""Top-level orchestration entry points for running VQE experiments."""
+
 import argparse
 import json
 from typing import Any, Dict
@@ -12,6 +14,7 @@ from .validation import build_validation_report
 
 
 def run(config: VQEConfig) -> Dict[str, Any]:
+    """Execute one configured experiment and export its result artifacts."""
     config.validate()
     if config.runtime.mode == "single":
         control_value = (
@@ -46,12 +49,14 @@ def run(config: VQEConfig) -> Dict[str, Any]:
 
 
 def parse_args() -> argparse.Namespace:
+    """Parse the minimal CLI used to launch a JSON-configured experiment."""
     parser = argparse.ArgumentParser(description="Run MindQuantum VQE experiments.")
     parser.add_argument("--config", type=str, required=False, help="Path to a JSON config file.")
     return parser.parse_args()
 
 
 def main() -> None:
+    """CLI entry point that loads configuration and prints a JSON report."""
     args = parse_args()
     config = VQEConfig.from_json(args.config) if args.config else VQEConfig()
     report = run(config)
